@@ -1,0 +1,332 @@
+---
+title: "Determinants of Farmers' Child Working on Agriculture"
+author: "Yuda Andika Darmawan"
+date: "1/29/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This is a project I with my colleagues have done during Research Methods class in undergraduate program of economics Universitas Indonesia back in 2018. In this project, we analyze the determinants of farmers' child also working in agriculture using Indonesia Family Life Survey (IFLS) dataset 2014.
+
+## Data Wrangling
+
+### Import Library and Dataset
+
+```{r cars}
+library(dplyr)
+library(haven)
+library(ggplot2)
+library(scales)
+library(ggthemes)
+
+# Import Data
+b3a_tk2 <- read_dta('b3a_tk2.dta')
+bk_ar1 <- read_dta('bk_ar1.dta')
+b2_ut1 <- read_dta('b2_ut1.dta')
+bk_sc1 <- read_dta('bk_sc1.dta')
+```
+
+### Current Residency Data
+
+Current residency data is taken from `bk_sc1` dataset. In this analysis, we take into account whether a family lives in Java has higher probability of its children getting into agriculture sector. The hypothesis is that a family lives in Java has lower probability of its children getting into agriculture because Java has many jobs outside agriculture than outside Java has. We also take into consideration whether a family lives in urban area or not increase the probability if its children working in agriculture. Living in urban areas is expected to have lower probability of farmers family's children working in agriculture because urban area have more variety of jobs.
+
+The variables are dummy variables, where:
+
+* `java` :
+  + `1`: if farmers family lives in Java
+  + `0`: if farmers family lives outside Java
+* `urban` :
+  + `1`: if farmers family lives in urban areas
+  + `0`: if farmers family lives in rural areas
+  
+```{r}
+# Current Residency Data ----
+residence <- bk_sc1 %>%
+  mutate(urban = ifelse(sc05 == 1, 1, 0),
+         java = ifelse(sc01_14_14 %in% c(31,32,33,34,35,36), 1, 0)) %>%
+  select(hhid14, urban, java)
+
+residence$java <- as.factor(residence$java)
+residence$urban <- as.factor(residence$urban)
+```
+
+### Working in Agriculture
+
+Working in agriculture is taken from `tk19ab` variable from `b3a_tk2` dataset. `tk19ab` is a 9-classification of working sector, which sector 1 is agriculture.
+
+The variable is dummy, where:
+
+* `agri` :
+  + `1`: if one works in agriculture
+  + `0`: if one works outside agriculture sector
+
+```{r}
+# Work in Agriculture ----
+agri_data <- b3a_tk2 %>%
+  mutate(agri = ifelse(tk19ab == 1, 1, 0)) %>%
+  select(hhid14, pid14, pidlink, agri)
+
+agri_data$agri <- as.factor(agri_data$agri)
+```
+
+### Household size
+`hh_size` is a number of household member in discrete.
+
+```{r}
+# Household size ----
+householdsize <- bk_ar1 %>%
+  group_by(hhid14) %>%
+  mutate(hh_size = n()) %>%
+  select(hhid14, hh_size)
+```
+
+### Household Head Variable
+
+Status whether one is a household head or not is based on variable `ar02b` from `bk_ar1` dataset, where `ar02b` is a variable indicating one's relationship with household head. If `ar02b` is equal to `1`, then he/she is a household head.
+
+```{r}
+# Houeshold Head Data ----
+hh_head <- bk_ar1 %>%
+  filter(ar01a == 1, ar02b == 1) %>%
+  select(hhid14, pid14, pidlink, ar02b)
+```
+
+Then, we join the data with working sector that we have cleaned up before to obtain what working sector does the household head work at. And then do some cleaning up.
+
+```{r}
+# Join with working in agriculture data
+hh_head_joined <- inner_join(hh_head, agri_data, by = c('hhid14', 'pid14', 'pidlink'))
+
+# Rename, transform as factor, and select
+hh_head_joined <- hh_head_joined %>%
+  rename(agri_hhhead = agri) %>%
+  mutate(agri_hhhead = as.factor(agri_hhhead)) %>%
+  select(hhid14, agri_hhhead)
+```
+
+### Spouse Variable
+
+The same procedure as household head data manipulation above, we would like to obtain what kind of sector do the spouse work at.
+
+```{r}
+# Spouse Data ----
+spouse <- bk_ar1 %>%
+  filter(ar01a == 1, ar02b == 2) %>%
+  select(hhid14, pid14, pidlink, ar02b)
+
+# Join with working in agriculture data
+spouse_joined <- inner_join(spouse, agri_data, by = c('hhid14', 'pid14', 'pidlink'))
+
+# Rename, transform as factor, and select
+spouse_joined <- spouse_joined %>%
+  rename(agri_spouse = agri) %>%
+  mutate(agri_spouse = as.factor(agri_spouse)) %>%
+  select(hhid14, agri_spouse)
+```
+
+### Son/Daughter Variable
+
+This variable is the main analysis of this research. We would like to know whether farmers family's son/daughter also works in agricultural sector. We do the same data manipulation to get the working sector of son/daughter aged 15-30 as what we do for household head and spouse. We would also like to obtain educational background, age, and gender to enrichen our analysis.
+
+Educational background is taken from `ar16` variable from `bk_ar1` dataset. Education, or `educ_son` consists of 4 categories:
+
+* `educ_son`:
+  + `0`: No schooling
+  + `1`: Elementary School
+  + `2`: Junior High School
+  + `3`: Senior High School
+  + `4`: University Degree
+  
+And gender variable taken from `ar09` variable originated from `bk_ar1` dataset. Gender, or `male` broken down into two categories:
+
+* `male`:
+  + `0`: Female
+  + `1`: Male
+
+```{r}
+# Son/Daughter Data ----
+son <- bk_ar1 %>%
+  filter(ar01a == 1, ar02b == 3, ar09 >=15, ar09 <= 30) %>%
+  mutate(educ_son = case_when(
+    ar16 %in% c(1, 90,  17, 14, 95) ~ 0,
+    ar16 %in% c(2, 72) ~ 1,
+    ar16 %in% c(3, 73, 4, 12) ~ 2,
+    ar16 %in% c(5, 6, 15, 74) ~ 3,
+    ar16 %in% c(13, 60, 61, 62, 63) ~ 4
+  ),
+  educ_son = as.factor(educ_son),
+  male = ifelse(ar07 == 1, 1, 0),
+  male = as.factor(male)) %>%
+  rename(age = ar09) %>%
+  select(hhid14, pid14, pidlink, ar02b, educ_son, age, male)
+
+# Join with working in agriculture data
+son_joined <- inner_join(son, agri_data, by = c('hhid14', 'pid14', 'pidlink'))
+
+# Rename, transform as factor, and select
+son_joined <- son_joined %>%
+  rename(agri_son = agri) %>%
+  mutate(agri_son = as.factor(agri_son)) %>%
+  select(hhid14, pid14, pidlink, educ_son, agri_son, age, male)
+```
+
+### Land variable
+Lastly, we want to obtain land area ($m^2$) that is occupied by farmers household.
+
+```{r}
+# Land Data ----
+b2_ut1$ut00bh[is.na(b2_ut1$ut00bh)] <- 0
+b2_ut1$ut00bm[is.na(b2_ut1$ut00bm)] <- 0
+
+land_m2 <- b2_ut1 %>%
+  mutate(hect_met = ut00bh * 10000,
+         land = hect_met + ut00bm) %>%
+  select(hhid14, land)
+```
+
+
+### Joining data together
+Next, we join all of the data we have created above for further analysis.
+
+```{r}
+merged_data <- inner_join(son_joined, hh_head_joined, by = 'hhid14')
+
+merged_data <- inner_join(merged_data, spouse_joined, by = 'hhid14')
+
+merged_data <- inner_join(merged_data, residence, by = 'hhid14')
+
+merged_data <- inner_join(merged_data, householdsize, by = 'hhid14')
+
+merged_data <- inner_join(merged_data, land_m2, by = 'hhid14')
+```
+
+And then we create a new variable, `one_parent_agri`, indicating only one parent works in agriculture, and `both_parent_agri`, indicating both parents work in agricultural sector. We filter the `merged_data` dataset to only family with at least one parent works in agriculture.
+
+```{r}
+merged_data <- merged_data %>%
+  mutate(one_parent_agri = case_when(
+    agri_spouse == 1 & agri_hhhead == 1 ~ 1,
+    agri_spouse == 1 & agri_hhhead == 0 ~ 1,
+    agri_spouse == 0 & agri_hhhead == 1 ~ 1,
+    agri_spouse == 0 & agri_hhhead == 0 ~ 0
+  ),
+          both_parent_agri = case_when(
+    agri_spouse == 1 & agri_hhhead == 1 ~ 1,
+    agri_spouse == 1 & agri_hhhead == 0 ~ 0,
+    agri_spouse == 0 & agri_hhhead == 1 ~ 0,
+    agri_spouse == 0 & agri_hhhead == 0 ~ 0
+  )) %>%
+  filter(one_parent_agri == 1)
+
+merged_data$one_parent_agri <- as.factor(merged_data$one_parent_agri)
+merged_data$both_parent_agri <- as.factor(merged_data$both_parent_agri)
+```
+
+
+
+## Exploratory Data Analysis
+
+In the next part, we want to analyze and discover pattern from the data we have obtained.
+
+### Relationship Between Son/Daughter and Both Parents Working in Agriculture
+
+```{r, fig.height=6, fig.width=9}
+ggplot(merged_data, aes(x = both_parent_agri, fill = agri_son)) +
+  geom_bar(position = 'dodge', aes(y = ..count../tapply(..count.., ..x.. ,sum)[..x..])) +
+  labs(title = "Percentage of Farmers' Son/Daughter Working in Agriculture\nWhen Both Parents Work in Agriculture") +
+  scale_y_continuous(labels = percent, name = 'Percentage') +
+  geom_text(aes(y=..count../tapply(..count.., ..x.. ,sum)[..x..],
+                label=scales::percent(..count../tapply(..count.., ..x.. ,sum)[..x..]) ),
+            stat="count", position=position_dodge(0.9), vjust=-0.5)+
+  scale_x_discrete(labels = c("Just One Parent in Agriculture", "Both Parents in Agriculture"),
+                   name = 'How Many Parent(s) Working in Agriculture') +
+  scale_fill_manual(labels = c("Not Working in Agriculture", "Working in Agriculture"),
+                    name = "Son/Daughter Working\nin Agriculture",
+                    values = c('#014d64', '#76c0c1')) +
+  theme_economist()
+```
+
+As the graph shown above, son/daughter with both parents working in agriculture has higher probability to work in agriculture.
+
+### Relationship between son/daughter's educational background with working in agriculture
+
+```{r, fig.height=6, fig.width=9}
+ggplot(merged_data, aes(x = educ_son, fill = agri_son)) +
+  geom_bar(position = 'dodge', aes(y = ..count../tapply(..count.., ..x.. ,sum)[..x..])) +
+  labs(title = "Percentage of Farmers' Son/Daughter Working in Agriculture\nBased on Education") +
+  scale_y_continuous(labels = percent, name = 'percentage') +
+  geom_text(aes(y=..count../tapply(..count.., ..x.. ,sum)[..x..],
+                label=scales::percent(..count../tapply(..count.., ..x.. ,sum)[..x..]) ),
+            stat="count", position=position_dodge(0.9), vjust=-0.5)+
+  scale_x_discrete(labels = c('No Schooling', 'Elementary School', 
+                              'Junior High School', 'Senior High School', 'University'),
+                   name = 'Son/Daughter Schooling') +
+  scale_fill_manual(labels = c("Not Working in Agriculture", "Working in Agriculture"),
+                    name = "Son/Daughter Working\nin Agriculture",
+                    values = c('#014d64', '#76c0c1')) +
+  theme_economist()
+```
+
+This graph above shows the complementarity between schooling and working in agriculture. As educational background goes higher, the probability to work in agriculture goes lower. And as educational background goes lower, the probability to work in agriculture goes higher. This evidence indicating that farmers typically have lower education. 
+
+### Relationship between gender and working in agriculture
+
+```{r, fig.height=6, fig.width=9}
+ggplot(merged_data, aes(x = male, fill = agri_son)) +
+  geom_bar(position = 'dodge', aes(y =..count../tapply(..count.., ..x.. ,sum)[..x..])) +
+  labs(title = "Percentage of Farmers' Daughter/Son Working in Agriculture Based on Gender") +
+  scale_y_continuous(labels = percent, name = 'percentage') +
+  geom_text(aes(y=..count../tapply(..count.., ..x.. ,sum)[..x..],
+                label=scales::percent(..count../tapply(..count.., ..x.. ,sum)[..x..]) ),
+            stat="count", position=position_dodge(0.9), vjust=-0.5)+
+  scale_x_discrete(labels = c('Female', 'Male'),
+                   name = 'Gender') +
+  scale_fill_manual(labels = c("Not Working in Agriculture", "Working in Agriculture"),
+                    name = "Son/Daughter Working\nin Agriculture",
+                    values = c('#014d64', '#76c0c1')) +
+  theme_economist()
+```
+
+The graph above shows that daughter of farmers family has lower chance to work in agriculture compared to son.
+
+### Relationship Between Living in Java and Working in Agriculture
+
+```{r, fig.height=6, fig.width=9}
+ggplot(merged_data, aes(x = as.factor(java), fill = agri_son)) +
+  geom_bar(position = 'dodge', aes(y =..count../tapply(..count.., ..x.. ,sum)[..x..])) +
+  labs(title = "Percentage of Farmers' Daughter/Son Working in Agriculture Based on Residency in Java") +
+  scale_y_continuous(labels = percent, name = 'percentage') +
+  geom_text(aes(y=..count../tapply(..count.., ..x.. ,sum)[..x..],
+                label=scales::percent(..count../tapply(..count.., ..x.. ,sum)[..x..]) ),
+            stat="count", position=position_dodge(0.9), vjust=-0.5)+
+  scale_x_discrete(labels = c('Non Java', 'Java')) +
+  scale_fill_manual(labels = c("Not Working in Agriculture", "Working in Agriculture"),
+                    name = "Son/Daughter Working\nin Agriculture",
+                    values = c('#014d64', '#76c0c1')) +
+  theme_economist()
+```
+
+It can be concluded that daughter/son of a farmer family has lower chance to work in agriculture if they live in Java. It is probably because of lower job creation outside Java, indicating regional inequality and 'java-centric development'
+
+### Relationship Between Living in Urban Areas and Working in Agriculture
+
+```{r, fig.height=6, fig.width=9}
+ggplot(merged_data, aes(x = urban, fill = agri_son)) +
+  geom_bar(position = 'dodge', aes(y =..count../tapply(..count.., ..x.. ,sum)[..x..])) +
+  labs(title = "Percentage of Farmers' Daughter/Son Working in Agriculture Based on Residency in Rural/Urban") +
+  scale_y_continuous(labels = percent, name = 'percentage') +
+  geom_text(aes(y=..count../tapply(..count.., ..x.. ,sum)[..x..],
+                label=scales::percent(..count../tapply(..count.., ..x.. ,sum)[..x..]) ),
+            stat="count", position=position_dodge(0.9), vjust=-0.5)+
+  scale_x_discrete(labels = c('Rural', 'Urban')) +
+  scale_fill_manual(labels = c("Not Working in Agriculture", "Working in Agriculture"),
+                    name = "Son/Daughter Working\nin Agriculture",
+                    values = c('#014d64', '#76c0c1')) +
+  theme_economist()
+```
+
+Son/daughter(s) of farmers family have higher chance to work in agriculture if they live in rural area rather than in urban area. This is because higher variety of jobs that urban areas have to offer. While jobs in rural areas are mostly agriculture.
+
