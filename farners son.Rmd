@@ -277,7 +277,7 @@ This graph above shows the complementarity between schooling and working in agri
 ```{r, fig.height=6, fig.width=9}
 ggplot(merged_data, aes(x = male, fill = agri_son)) +
   geom_bar(position = 'dodge', aes(y =..count../tapply(..count.., ..x.. ,sum)[..x..])) +
-  labs(title = "Percentage of Farmers' Daughter/Son Working in Agriculture Based on Gender") +
+  labs(title = "Percentage of Farmers' Daughter/Son Working in Agriculture\nBased on Gender") +
   scale_y_continuous(labels = percent, name = 'percentage') +
   geom_text(aes(y=..count../tapply(..count.., ..x.. ,sum)[..x..],
                 label=scales::percent(..count../tapply(..count.., ..x.. ,sum)[..x..]) ),
@@ -295,9 +295,9 @@ The graph above shows that daughter of farmers family has lower chance to work i
 ### Relationship Between Living in Java and Working in Agriculture
 
 ```{r, fig.height=6, fig.width=9}
-ggplot(merged_data, aes(x = as.factor(java), fill = agri_son)) +
+ggplot(merged_data, aes(x = java, fill = agri_son)) +
   geom_bar(position = 'dodge', aes(y =..count../tapply(..count.., ..x.. ,sum)[..x..])) +
-  labs(title = "Percentage of Farmers' Daughter/Son Working in Agriculture Based on Residency in Java") +
+  labs(title = "Percentage of Farmers' Daughter/Son Working in Agriculture\nBased on Residency in Java") +
   scale_y_continuous(labels = percent, name = 'percentage') +
   geom_text(aes(y=..count../tapply(..count.., ..x.. ,sum)[..x..],
                 label=scales::percent(..count../tapply(..count.., ..x.. ,sum)[..x..]) ),
@@ -316,7 +316,7 @@ It can be concluded that daughter/son of a farmer family has lower chance to wor
 ```{r, fig.height=6, fig.width=9}
 ggplot(merged_data, aes(x = urban, fill = agri_son)) +
   geom_bar(position = 'dodge', aes(y =..count../tapply(..count.., ..x.. ,sum)[..x..])) +
-  labs(title = "Percentage of Farmers' Daughter/Son Working in Agriculture Based on Residency in Rural/Urban") +
+  labs(title = "Percentage of Farmers' Daughter/Son Working in Agriculture\nBased on Residency in Rural/Urban") +
   scale_y_continuous(labels = percent, name = 'percentage') +
   geom_text(aes(y=..count../tapply(..count.., ..x.. ,sum)[..x..],
                 label=scales::percent(..count../tapply(..count.., ..x.. ,sum)[..x..]) ),
